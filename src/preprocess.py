@@ -1,198 +1,273 @@
-# src/preprocess.py
-
-from pathlib import Path
-
 import pandas as pd
+import numpy as np
+
+# 데이터 불러오기
+commute = pd.read_csv("data/raw/commute.csv")
+stress = pd.read_csv("data/raw/stress.csv")
+happiness = pd.read_csv("data/raw/happiness.csv")
+hobby = pd.read_csv("data/raw/hobby.csv")
+
+# 데이터 구조 확인
+# print(commute.shape)
+# print(commute.columns)
+# print(stress.shape)
+# print(stress.columns)
+# print(happiness.shape)
+# print(happiness.columns)
+# print(hobby.shape)
+# print(hobby.columns)
+
+# 컬럼명 정리
+# 분석할 때 사용하기 쉽도록 길거나 복잡한 컬럼명을 간단하게 변경
+
+# 1. 통근·통학시간 데이터
+commute = commute.rename(
+    columns={
+        "구분별(1)": "구분",
+        "구분별(2)": "구분상세",
+        "30분 미만 (%)": "30분미만",
+        "30분-1시간 미만 (%)": "30분_1시간",
+        "1시간-1시간 30분 미만 (%)": "1시간_1시간30분",
+        "1시간 30분-2시간 미만 (%)": "1시간30분_2시간",
+        "2시간 이상 (%)": "2시간이상",
+        "평균소요시간 (분)": "평균통근시간",
+    }
+)
+
+#print("commute")
+#print(commute.columns.tolist())
 
 
-# ============================================================
-# 1. 경로 설정
-# ============================================================
+stress = stress.rename(
+    columns={
+        "구분별(1)": "구분",
+        "구분별(2)": "구분상세",
+        "전혀 느끼지 않았다 (%)": "전혀안느낌",
+        "느끼지 않은 편이다 (%)": "별로안느낌",
+        "보통이다 (%)": "보통",
+        "느낀 편이다 (%)": "느낀편",
+        "매우 많이 느꼈다 (%)": "매우많이느낌",
+        "10점 평균 (점)": "스트레스점수",
+    }
+)
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+# print("stress")
+# print(stress.columns.tolist())
 
-RAW_DIR = BASE_DIR / "data" / "raw"
-PROCESSED_DIR = BASE_DIR / "data" / "processed"
+happiness = happiness.rename(
+    columns={
+        "구분별(1)": "구분",
+        "구분별(2)": "구분상세",
+        "소계" : "행복지수",
+        "자신의 건강상태": "건강상태",
+        "자신의 재정상태": "재정상태",
+        "주위 친지 친구와의 관계": "친지친구관계",
+        "가정생활": "가정생활",
+        "사회생활": "사회생활",
+    }
+)
 
-COMMUTE_PATH = RAW_DIR / "commute.csv"
-STRESS_PATH = RAW_DIR / "stress.csv"
-HAPPINESS_PATH = RAW_DIR / "happiness.csv"
+# print("happiness")
+# print(happiness.columns.tolist())
 
+hobby = hobby.rename(
+    columns={
+        "구분별(1)": "구분",
+        "구분별(2)": "구분상세",
+        "관광(국내외 여행 캠핑 야외 나들이 등)": "관광",
+        "스포츠 참여활동(축구 테니스 골프 수영 조깅 헬스 요가 등)": "스포츠활동",
+        "문화예술 관람(영화 연극 전시회 연주회 콘서트 등)": "문화예술관람",
+        "문화예술 참여활동(문학행사 미술 악기연주 무용/댄스 사진 등)": "문화예술참여",
+        "스포츠 관람(경기장 직접관람 미디어 통한 간접관람 e-스포츠 경기 포함)": "스포츠관람",
+        "취미/오락활동(생활공예 독서 온라인게임 인터넷검색 쇼핑/외식 등)": "취미오락",
+        "휴식 활동(산책 낮잠 TV시청 모바일컨텐츠/OTT시청 음악감상 아무것도 안하기 등)": "휴식",
+        "사회 및 기타 활동(자원봉사 모임 종교활동 기타 여가활동 등)": "사회기타활동",
+    }
+)
 
-# ============================================================
-# 2. 공통 전처리
-# ============================================================
-
-def clean_dataframe(df):
-    # 컬럼명 공백 제거
-    df.columns = (
-        df.columns
-        .str.replace("\xa0", " ", regex=False)
-        .str.strip()
-    )
-
-    # 문자열 앞뒤 공백 제거
-    text_columns = df.select_dtypes(include="object").columns
-
-    for col in text_columns:
-        df[col] = (
-            df[col]
-            .str.replace("\xa0", " ", regex=False)
-            .str.strip()
-        )
-
-    # 완전히 비어 있는 행/열 제거
-    df = df.dropna(how="all")
-    df = df.dropna(axis=1, how="all")
-
-    return df.reset_index(drop=True)
-
-
-# ============================================================
-# 3. 데이터 상태 확인
-# ============================================================
-
-def check_data(df, name):
-    print(f"\n[{name}]")
-
-    # 결측치
-    missing = df.isnull().sum()
-    missing = missing[missing > 0]
-
-    print("\n결측치")
-    if missing.empty:
-        print("없음")
-    else:
-        print(missing)
-
-    # 중복값
-    duplicate_count = df.duplicated().sum()
-
-    print("\n중복 행")
-    print(duplicate_count)
-
-    # 숫자형 컬럼 기초통계
-    numeric_columns = df.select_dtypes(include="number").columns
-
-    print("\n수치형 데이터 기초통계")
-    if len(numeric_columns) == 0:
-        print("수치형 컬럼 없음")
-    else:
-        print(df[numeric_columns].describe())
+# print("hobby")
+# print(hobby.columns.tolist())
 
 
-# ============================================================
-# 4. 이상치 확인
-# ============================================================
+# 문자열 컬럼 값의 앞뒤 공백 제거
+def clean_strip(df):
+    for col in df.columns:
+        if df[col].dtype == "object":
+            df[col] = df[col].str.strip()
 
-def check_outliers(df):
-    numeric_columns = df.select_dtypes(include="number").columns
+clean_strip(commute)
+clean_strip(stress)
+clean_strip(happiness)
+clean_strip(hobby)
 
-    for col in numeric_columns:
-        q1 = df[col].quantile(0.25)
-        q3 = df[col].quantile(0.75)
 
-        iqr = q3 - q1
+# 결측치 확인
+# 4개의 데이터 결측치 없음 확인
+def check_missing(df, name):
+    print(f"\n===== {name} 결측치 =====")
+    print(df.isnull().sum())
 
-        lower = q1 - 1.5 * iqr
-        upper = q3 + 1.5 * iqr
+check_missing(commute, "commute")
+check_missing(stress, "stress")
+check_missing(happiness, "happiness")
+check_missing(hobby, "hobby")
 
-        outliers = df[
-            (df[col] < lower) |
-            (df[col] > upper)
+
+# 중복값 확인
+# 4개의 데이터 중복값 없음 확인
+def check_duplicates(df, name):
+    print(f"\n===== {name} 중복값 =====")
+    
+    duplicated = df[df.duplicated()]
+    
+    print("중복값 개수:", len(duplicated))
+    print(duplicated)
+
+
+check_duplicates(commute, "commute")
+check_duplicates(stress, "stress")
+check_duplicates(happiness, "happiness")
+check_duplicates(hobby, "hobby")
+
+
+# 특수값 확인
+# commute 데이터의 '-' 값은 해당 구간의 비율이 없는 경우이므로 0으로 처리
+commute = commute.replace("-", 0)
+
+
+# 7. 숫자형 변환
+commute_numeric_cols = [
+    "30분미만",
+    "30분_1시간",
+    "1시간_1시간30분",
+    "1시간30분_2시간",
+    "2시간이상",
+    "평균통근시간",
+]
+
+stress_numeric_cols = [
+    "전혀안느낌",
+    "별로안느낌",
+    "보통",
+    "느낀편",
+    "매우많이느낌",
+    "스트레스점수",
+]
+
+happiness_numeric_cols = [
+    "행복지수",
+    "건강상태",
+    "재정상태",
+    "친지친구관계",
+    "가정생활",
+    "사회생활",
+]
+
+hobby_numeric_cols = [
+    "관광",
+    "스포츠활동",
+    "문화예술관람",
+    "문화예술참여",
+    "스포츠관람",
+    "취미오락",
+    "휴식",
+    "사회기타활동",
+]
+
+
+commute[commute_numeric_cols] = commute[
+    commute_numeric_cols
+].apply(pd.to_numeric, errors="coerce")
+
+stress[stress_numeric_cols] = stress[
+    stress_numeric_cols
+].apply(pd.to_numeric, errors="coerce")
+
+happiness[happiness_numeric_cols] = happiness[
+    happiness_numeric_cols
+].apply(pd.to_numeric, errors="coerce")
+
+hobby[hobby_numeric_cols] = hobby[
+    hobby_numeric_cols
+].apply(pd.to_numeric, errors="coerce")
+
+
+
+# 8. 파생변수 생성
+# 1시간 이상 통근하는 비율
+commute["장시간통근율"] = (
+    commute["1시간_1시간30분"]
+    + commute["1시간30분_2시간"]
+    + commute["2시간이상"]
+).round(1)
+
+# 스트레스를 느낀다고 응답한 비율
+stress["스트레스체감률"] = (
+    stress["느낀편"]
+    + stress["매우많이느낌"]
+).round(1)
+
+
+# 9. 전처리 결과 확인
+print("\n===== commute =====")
+print(
+    commute[
+        [
+            "구분",
+            "구분상세",
+            "평균통근시간",
+            "장시간통근율",
         ]
+    ].head()
+)
 
-        if not outliers.empty:
-            print(f"\n{col} 이상치 후보: {len(outliers)}개")
-            print(outliers[[col]])
+print("\n===== stress =====")
+print(
+    stress[
+        [
+            "구분",
+            "구분상세",
+            "스트레스점수",
+            "스트레스체감률",
+        ]
+    ].head()
+)
 
+print("\n===== happiness =====")
+print(
+    happiness[
+        [
+            "구분",
+            "구분상세",
+            "행복지수",
+        ]
+    ].head()
+)
 
-# ============================================================
-# 5. 통근 데이터
-# ============================================================
+print("\n===== hobby =====")
+print(hobby.head())
 
-def preprocess_commute():
-    df = pd.read_csv(COMMUTE_PATH)
+commute.to_csv(
+    "data/processed/commute_processed.csv",
+    index=False,
+    encoding="utf-8-sig"
+)
 
-    df = clean_dataframe(df)
+stress.to_csv(
+    "data/processed/stress_processed.csv",
+    index=False,
+    encoding="utf-8-sig"
+)
 
-    check_data(df, "통근 데이터")
-    check_outliers(df)
+happiness.to_csv(
+    "data/processed/happiness_processed.csv",
+    index=False,
+    encoding="utf-8-sig"
+)
 
-    return df
+hobby.to_csv(
+    "data/processed/hobby_processed.csv",
+    index=False,
+    encoding="utf-8-sig"
+)
 
-
-# ============================================================
-# 6. 스트레스 데이터
-# ============================================================
-
-def preprocess_stress():
-    df = pd.read_csv(STRESS_PATH)
-
-    df = clean_dataframe(df)
-
-    check_data(df, "스트레스 데이터")
-    check_outliers(df)
-
-    return df
-
-
-# ============================================================
-# 7. 행복지수 데이터
-# ============================================================
-
-def preprocess_happiness():
-    df = pd.read_csv(HAPPINESS_PATH)
-
-    df = clean_dataframe(df)
-
-    check_data(df, "행복지수 데이터")
-    check_outliers(df)
-
-    return df
-
-
-# ============================================================
-# 8. 저장
-# ============================================================
-
-def save_data(df, filename):
-    PROCESSED_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    df.to_csv(
-        PROCESSED_DIR / filename,
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-
-# ============================================================
-# 9. 실행
-# ============================================================
-
-def main():
-    commute = preprocess_commute()
-    stress = preprocess_stress()
-    happiness = preprocess_happiness()
-
-    save_data(
-        commute,
-        "commute_processed.csv"
-    )
-
-    save_data(
-        stress,
-        "stress_processed.csv"
-    )
-
-    save_data(
-        happiness,
-        "happiness_processed.csv"
-    )
-
-
-if __name__ == "__main__":
-    main()
