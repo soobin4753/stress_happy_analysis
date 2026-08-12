@@ -310,6 +310,14 @@ else:
 
 kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
+st.markdown("""
+<style>
+[data-testid="stMetricValue"] {
+    font-size: 22px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 kpi1.metric(
     "스트레스체감률",
     f"{stress_rate:.1f}%"
